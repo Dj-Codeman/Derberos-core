@@ -1,0 +1,392 @@
+#!/bin/bash
+
+source "/opt/encore/config"
+# add a session create destroy and timer
+
+# ! system
+function relax {
+    echo "HELLO OUT THERE" >/dev/null
+}
+
+function shift_count {
+    # TODO when users are deleted this will find the missing
+    # TODO numbers and shift all existing users around
+
+    relax
+}
+
+function count_system {
+
+    command="$1"
+
+    if [[ "$command" != "+" ]] && [[ "$command" != "-" ]] && [[ "$command" != "=" ]]; then
+
+        echo -e "The \"'$1'\" argument is not valid \nYou can only use + or -"
+
+    else
+
+        encore read count dbros
+
+        count_dir="$datadir/dbros-count"
+
+        # ? if the count file does not exist create is and pay ? #
+        if [[ ! -f $count_dir ]]; then
+            touch $count_dir
+            echo "0" >$count_dir
+            encore write $count_dir count dbros
+            echo "Count file didnt exist? Good luck. "
+            exit 0
+        fi
+
+        count="$(cat $count_dir)"
+        count="$(echo $count | sed 's/ //' | tr -d '\n')"
+
+        # one line if:  if (condition); THEN command; fi
+        if [[ "$command" == "+" ]]; then ((count = count + 1)); fi
+        if [[ "$command" == "-" ]]; then ((count = count - 1)); fi
+        if [[ "$command" == "=" ]]; then echo $count exit 0; fi
+
+        echo $count >$count_dir
+        encore write $count_dir count dbros
+
+        clear
+    fi
+}
+
+function initialize_count {
+    # TODO create a counter for user created
+    # ! EXPECTATION : count="$(system_count current)"
+    count_system =
+    counter="$(echo $count)"
+}
+
+# ! This is user management
+
+function capture_passwd {
+
+    # !!!!!!!!!!
+    # ! Whatever calls this script has to unset $passwd0 & $passwd1
+
+    source "/opt/encore/config"
+    value="$(echo -n "$1" | tr -d '\n')"
+
+    if [[ "$value" == "validate" ]]; then
+
+        read -s -r -p "Please enter password : " passwd0
+        echo -e "\n"
+        read -s -r -p "Please re-enter password : " passwd1
+        echo -e "\n"
+
+    elif [[ -z $value ]]; then
+
+        read -s -r -p "Please enter password : " passwd0
+
+    else
+        echo "Invalid option given"
+        exit 1
+    fi
+
+    val="$(cat $systemkey)"
+    passwd0="$(echo -n $passwd0 $val | md5sum | sed 's/ -/ - END/g')"
+
+    if [[ ! -z $passwd1 ]]; then
+        passwd1="$(echo -n $passwd1 $val | md5sum | sed 's/ -/ - END/g')"
+    fi
+}
+
+function compare_passwd_external {
+
+    capture_passwd validate
+
+    password1="$(echo $passwd0 | tr -d '\n')"
+    password2="$(echo $passwd1 | tr -d '\n')"
+
+    if [[ $password1 == $password2 ]]; then
+
+        unset $password2
+        name0="$(echo -n $Uname | md5sum | sed 's/ -//g')"
+        echo "$password1"
+        unset $password1
+        unset $name0
+
+    else
+
+        ((flag = flag + 1))
+        error_msg="Password validation failed"
+        echo "$error_msg"
+        exit 1
+
+    fi
+
+}
+
+function compare_passwd_internal {
+
+    uname="$1"
+    echo -e "\n"
+    capture_passwd
+    echo -e "\n"
+
+    uname="$(echo $uname | sed 's/ //g')"
+    name0="$(echo -n $uname | md5sum | sed 's/ -//')"
+    tname="$(echo $uname | base64 | sed 's/ //g')"
+
+    encore read $name0 dbros
+
+    pass_dir="$datadir/dbros-$name0"
+    test_dir="/tmp/$tname"
+
+    touch $test_dir
+    # cat "$pass_dir" >$test_dir
+    passwd1="$(cat $pass_dir | sed 's/  / /')"
+    #cat $pass_dir >$test_dir
+    echo -e "$( echo $passwd1 | sed 's/ //')" > $test_dir
+    echo -e "$( echo $passwd0 | sed 's/ //')" >>$test_dir
+
+
+    pass_test="$(grep -c "$( echo $passwd0 | sed 's/ //')" $test_dir)"
+    echo "$pass_est"
+
+    # ! Whatever calls the validate passwd function has to delete the decrypted jn file
+
+    # ! lazy fix
+    # TODO why does grep -c passowrd return 3 ?
+
+    if [[ $pass_test -eq 2 ]]; then
+        valid=1
+        echo "passed"
+        clean_data $uname 
+        # clean_data $uname
+        if [[ -z $2 ]]; then
+            # rm "$datadir/dbros-$name0" > /dev/null
+            unset $passwd0
+        else
+            # pwd=$pass
+            relax
+        fi
+    else
+        clean_data $uname 
+        error_msg="Password validation failed"
+        echo $error_msg
+        exit 1
+    fi
+
+}
+
+function write_passwd {
+    relax
+}
+
+function create_user {
+
+    initialize_count
+
+    read -r -p "First Name ? : " Fname
+
+    read -r -p "Last name ? : " Lname
+
+    read -r -p "Username ? : " Uname
+
+    read -r -p "Email ? : " Email
+
+    name0="$(echo -n $Uname | md5sum | sed 's/ -//')"
+    name0="$(echo -n $name0 | sed 's/ //')"
+    tmp_dir="/tmp/$name0-pass"
+
+    passwd="$(compare_passwd_external | tr -d '\n')"
+
+    echo $passwd | tee "$tmp_dir"
+
+    clear
+
+    encore write "$tmp_dir" $name0 dbros
+
+    # Validating data
+    error_msg="No Errors"
+
+    # ! EMAIL
+    # ? regex string found
+    # ? https://stackoverflow.com/questions/2138701/checking-correctness-of-an-email-address-with-a-regular-expression-in-bash
+    regex="^[a-z0-9!#\$%&'*+/=?^_\`{|}~-]+(\.[a-z0-9!#$%&'*+/=?^_\`{|}~-]+)*@([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z0-9]([a-z0-9-]*[a-z0-9])?\$"
+
+    if [[ $Email =~ $regex ]]; then
+
+        flag=0
+
+    else
+
+        ((flag = flag + 1))
+        error_msg="Email address is not syntactically correct"
+
+    fi
+
+    # ! NAMES
+
+    fname_val=0
+    lname_val=0
+    fname_val="$(echo "$Fname" | grep -c [0-9])"
+    lname_val="$(echo "$Lname" | grep -c [0-9])"
+
+    if [[ $fname_val -ge 1 ]] || [[ $lname_val -ge 1 ]]; then
+
+        ((flag = flag + 1))
+        error_msg="First and Last name must contain no numbers"
+
+    fi
+
+    # ! USERNAME
+
+    list="root system admin www-data count"
+
+    if [[ $list =~ (^|[[:space:]])$Uname($|[[:space:]]) ]]; then
+
+        ((flag = flag + 1))
+        error_msg="Username must not be one of the following : root system admin www-data"
+
+    fi
+
+    if [ $flag -le 0 ]; then
+
+        echo "validation complete"
+
+        echo "[\"$counter\",\"$Fname\",\"$Lname\",\"$Uname\",\"$Email\" ]" |
+            jq -r '{ "Id":.[0], "First Name":.[1], "Last Name":.[2], "Username":.[3], "email":.[4] }' >>/tmp/$Uname-deberos.tmp
+
+        if [[ -f "/tmp/$name0" ]]; then
+            rm -v "/tmp/$name0"
+        fi
+        # ! writing to json file section
+
+        if [[ -f "/tmp/$Uname-deberos.tmp" ]]; then
+
+            echo -e "User created sucessfully ! \n"
+            echo -e "Securing \n"
+            encore write "/tmp/$Uname-deberos.tmp" "$Uname" "dbros"
+            # check if the write suceeded
+            if [ $? -eq 0 ]; then
+                count_system +
+            fi
+            clear
+            unset $passwd
+            exit 0
+
+        else
+
+            echo "An error occoured"
+            exit 1
+
+        fi
+
+    else
+
+        echo $error_msg
+        echo "validation failed"
+        exit 1
+
+    fi
+
+}
+
+function delete_user {
+    uname="$1"
+
+    uname="$(echo $uname | sed 's/ //g')"
+    name0="$(echo -n $uname | md5sum | sed 's/ -//')"
+    tname="$(echo $uname | base64 | sed 's/ //g')"
+
+    encore destroy $name0 dbros
+    encore destroy $uname dbros
+
+    clean_data $uname
+    count_system -
+
+    exit 0
+
+}
+
+function change_passwd {
+
+    uname="$1"
+    compare_passwd_internal "$uname"
+
+    if [[ "$valid" == "1" ]]; then
+
+        password="$(compare_passwd_external)"
+
+        # ! passwd handeling
+
+        if [[ -z $password ]]; then
+
+            echo $error_msg
+            exit 1
+
+        else
+
+            uname="$(echo $uname | sed 's/ //g')"
+            name0="$(echo -n $uname | md5sum | sed 's/ -//')"
+
+            pass_dir="$datadir/dbros-$name0"
+
+            echo $password >$pass_dir
+            encore write $pass_dir $name0 dbros
+            clear
+            exit 0
+
+        fi
+
+    fi
+}
+
+function clean_data {
+
+    # TODO figure out some way to use this
+
+    uname="$1"
+    uname="$(echo $uname | sed 's/ //g')"
+    name0="$(echo -n $uname | md5sum | sed 's/ -//')"
+    tname="$(echo $uname | base64 | sed 's/ //g')"
+
+    name_dir="$datadir/dbros-$uname"
+    pass_dir="$datadir/dbros-$name0"
+    test_dir="/tmp/$tname"
+
+    rm -v $name_dir &>/dev/null
+    rm -v $pass_dir &>/dev/null
+    rm -v $test_dir &>/dev/null
+
+}
+
+# ! User commands
+
+function identify {
+
+    uname="$1"
+    compare_passwd_internal "$uname"
+
+    if [[ "$valid" == "1" ]]; then
+
+        encore read $uname dbros
+
+        tmp="$datadir/dbros-$uname"
+
+        username="$(cat "$tmp" | jq ' .Username' | sed 's/"//g')"
+
+        clear
+        echo "You authenticated as $username"
+
+        clean_data $uname
+
+    else
+
+        error_msg="Password validation failed"
+        echo $error_msg
+        exit 1
+    fi
+
+}
+
+# ! Maintenece
+
+function clean_tmp {
+    relax
+}

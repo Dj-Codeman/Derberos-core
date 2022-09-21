@@ -1,0 +1,134 @@
+DEBEROS tcp/ip LANG
+
+# authenticating 
+
+auth [-n] [-u]
+; auth -n queries if there is a user signed in; returns 0 if true
+; auth -u initiates a signon request with the specified user
+ auth -u username
+ 
+ psh [-p] [-t] [-d]
+; psh pushing data to server or client
+push -p sends a hex encoded passwd
+push -d sends hex encoded data
+push -t  
+
+req -p -n -u 
+; req requests data from the server
+req -p request a password   
+req -n request password by hex encoded name
+req -u request password by hex encoded uid
+ 
+# command status 
+
+first byte is commad status, second bit is next option allowed 
+
+first byte
+
+0 sucess
+
+1 applied 
+
+2 submitted
+
+3 saved 
+
+4 requested
+
+5 incomming 
+
+6 done 
+
+7 yes 
+
+8 no
+
+9 not found
+
+a retry
+
+b invalid
+
+c empty
+
+d empty
+
+e empty
+
+f unauthorized
+
+
+second byte
+
+0 continue 
+
+1 stop
+
+2 exit
+
+
+
+
+#### simple examples
+
+** connection initiated 
+
+# client 
+auth -n 
+
+# response
+80
+
+# client 
+push -p 4093f4hg9h37g53
+
+# server
+00
+
+### server authorizes given credentials
+
+# client
+auth -n 
+
+# server
+70
+
+# client 
+req -p
+
+# server
+00
+
+# client 
+req -n 00988dccaef890b
+
+# server 
+00 # acknowleged 
+50 # sending passwd
+44b6c9d44aabd46e89ff # hex encoded passwd 
+0000ff # transmission complete readback requested
+
+# client
+00 # acknowledeg
+50 # sending passwd
+44b6c9d44aabd46e89ff # readback
+0000aa # transmmission complete
+
+# server 
+# after verifing read back
+00  # ack
+60  # verified done with passwd
+
+# client
+00 # ack
+** close connection 
+** start a timer for x secs then delete the session id
+
+
+
+
+
+
+ 
+
+
